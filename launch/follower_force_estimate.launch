@@ -1,0 +1,35 @@
+<launch>
+<group ns = "follower_ukf">
+   <node pkg="UKF" name="ukf" type="force_estimatee" output="screen" >
+   <!--
+     <param name="topic_imu" value="/mavros/imu/data" />
+     <param name="topic_raw" value="/mavros/imu/data_raw" />
+     <param name="topic_mocap" value="/mavros/local_position/pose" />
+     <param name="topic_vel" value="/mavros/local_position/velocity_body" />
+     <param name="topic_thrust" value="/mavros/rc/out" />
+     <param name="topic_mag" value="/mavros/imu/mag" />
+     <param name="topic_battery" value="/mavros/battery" />
+
+     <param name="topic_odom" value="/vins_estimator/odometry" />
+     <param name="topic_drone" value="2" />
+     <param name="topic_acc_bias" value="/vins_estimator/acc_bias" />
+      -->
+     <param name="topic_imu" value="/uav1/mavros/imu/data" />
+     <param name="topic_raw" value="/uav1/mavros/imu/data_raw" />
+     <param name="topic_mocap" value="/uav1/mavros/local_position/pose" />
+     <param name="topic_vel" value="/uav1/mavros/local_position/velocity_body" />
+     <param name="topic_thrust" value="/uav1/mavros/rc/out" />
+     <param name="topic_mag" value="/uav1/mavros/imu/mag" />
+     <param name="topic_battery" value="/uav1/mavros/battery" />
+
+     <param name="topic_odom" value="/vins_estimator/odometry" />
+     <param name="topic_drone" value="2" />
+     <param name="topic_acc_bias" value="/vins_estimator/acc_bias" />
+
+
+
+
+
+   </node>
+</group>
+</launch>
