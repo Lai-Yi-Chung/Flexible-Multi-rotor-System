@@ -36,6 +36,11 @@
 
 #include "rls.h"
 
+#include <ctime>
+#include <cstdlib>
+#include <chrono>
+std::chrono::time_point<std::chrono::system_clock> start, end;
+
 int drone_flag;
 int bias_flag;
 forceest forceest1(statesize,measurementsize);
@@ -194,7 +199,15 @@ int main(int argc, char **argv)
     ros::Publisher thrust_pub = nh.advertise<geometry_msgs::Point>("thrust", 2);
     ros::Publisher least_square_pub = nh.advertise<geometry_msgs::Point>("least_square", 2);
 
-
+    ros::Subscriber force_sub_0 = nh.subscribe<geometry_msgs::WrenchStamped>
+            ("/rotor_0_ft", 3, force_0_cb);
+    ros::Subscriber force_sub_1 = nh.subscribe<geometry_msgs::WrenchStamped>
+            ("/rotor_1_ft", 3, force_1_cb);
+    ros::Subscriber force_sub_2 = nh.subscribe<geometry_msgs::WrenchStamped>
+            ("/rotor_2_ft", 3, force_2_cb);
+    ros::Subscriber force_sub_3 = nh.subscribe<geometry_msgs::WrenchStamped>
+            ("/rotor_3_ft", 3, force_3_cb);
+/*
     ros::Subscriber force_sub_0 = nh.subscribe<geometry_msgs::WrenchStamped>
             ("/uav1/rotor_0_ft", 3, force_0_cb);
     ros::Subscriber force_sub_1 = nh.subscribe<geometry_msgs::WrenchStamped>
@@ -203,9 +216,9 @@ int main(int argc, char **argv)
             ("/uav1/rotor_2_ft", 3, force_2_cb);
     ros::Subscriber force_sub_3 = nh.subscribe<geometry_msgs::WrenchStamped>
             ("/uav1/rotor_3_ft", 3, force_3_cb);
-
+*/
     ros::Rate loop_rate(30);
-
+    //ros::Rate loop_rate(100);
 
 //----------drone arm length-------------
     double l = 0.25;
@@ -218,9 +231,11 @@ int main(int argc, char **argv)
     Eigen::VectorXd output;
     output.setZero(4,1);
 //----------low pass filter parameter ----------------
-    double SAMPLE_RATE = 150;
-    double CUTOFF = 50;
+    double SAMPLE_RATE = 100;
+    double CUTOFF = 0.1;//50 0.5
     double ooutput = 0 , last_output = 0;
+    double ooutput1 = 0 , last_output1 = 0;
+    double filter_torque_y[10] , filter_acc_y[10];
 //----------recursuve least square ------------------
     rls num_rls;
     Eigen::VectorXd theta;
@@ -232,6 +247,8 @@ int main(int argc, char **argv)
 //----------delay offset ----------------------------
     double prev_torque[10] ;
     double prev_value[10][4];
+//---------------------------------------
+
 //----------UKF parameter setting ------------------
     double measure_ex, measure_ey, measure_ez;
     double sum_pwm;
@@ -308,7 +325,7 @@ int main(int argc, char **argv)
 //-------------UKF end---------------------------------
 
 
-
+    start = std::chrono::system_clock::now();
     while(ros::ok()){
 
         double F1, F2, F3, F4;
@@ -340,7 +357,7 @@ int main(int argc, char **argv)
             forceest1.thrust = F1 + F2 + F3 + F4;
             torque_ground.x = l*(F1 - F2 - F3 + F4);
             torque_ground.y = l*(-F1 - F2 + F3 + F4);
-            //U_y = -0.35*F1 - 0.15*F2 + 0.45*F3 + 0.25*F4;
+            //torque_ground.y = -0.35*F1 - 0.15*F2 + 0.45*F3 + 0.25*F4;
             torque_ground.z = k*F1 - k*F2 + k*F3 - k*F4;
 
 //-----------MRP ---------------------------------------------------
@@ -371,7 +388,13 @@ int main(int argc, char **argv)
             forceest1.quat_m << drone2_pose.pose.orientation.x, drone2_pose.pose.orientation.y, drone2_pose.pose.orientation.z, drone2_pose.pose.orientation.w;
             forceest1.qk11 = forceest1.qk1;
 
+            //start = std::chrono::system_clock::now();
             forceest1.correct(measure);
+            //end = std::chrono::system_clock::now();
+            //std::chrono::duration<double> elapsed_seconds = end - start;
+            //ROS_INFO("execute time   %lf ",elapsed_seconds.count() * 1000 );
+
+
             forceest1.x[e_x] = 0;
             forceest1.x[e_y] = 0;
             forceest1.x[e_z] = 0;
@@ -404,6 +427,7 @@ int main(int argc, char **argv)
 
 //------------use rotation dynamics to calculate torque-----------------
             double delta_t = 0.0333333;
+            //double delta_t = 0.01;
             now_angular(0) = angular_v.x;
             now_angular(1) = angular_v.y;
             now_angular(2) = angular_v.z;
@@ -418,13 +442,6 @@ int main(int argc, char **argv)
             last_angular(1) =angular_v.y ;
             last_angular(2) =angular_v.z ;
 
-
-
-
-            body_torque.x = drone2_pose.pose.position.x;
-            //body_torque.y = forceest1.x[tau_y];
-            //body_torque.y = torque_truth(1);
-            body_torque.z = forceest1.x[tau_z];
 
 
 /*
@@ -444,10 +461,10 @@ int main(int argc, char **argv)
 //------------------shift force ----------------------
             for(int i = 0; i < 3 ; i++){
                     if(i == 2){
-                        prev_value[2][0] = F1;
-                        prev_value[2][1] = F2;
-                        prev_value[2][2] = F3;
-                        prev_value[2][3] = F4;
+                        prev_value[i][0] = F1;
+                        prev_value[i][1] = F2;
+                        prev_value[i][2] = F3;
+                        prev_value[i][3] = F4;
                     }
                     else{
                         prev_value[i][0] = prev_value[i+1][0];
@@ -458,7 +475,7 @@ int main(int argc, char **argv)
             }
 
 
-            //----------least square--------------//
+ //-------------------recursive least square--------------
             /*
             Eigen::MatrixVd input_force;
             input_force.setZero(1,4);
@@ -476,23 +493,63 @@ int main(int argc, char **argv)
             theta = num_rls.update( F1,F2,F3,F4, forceest1.x[tau_y]);
 
             //ROS_INFO("RLS  %lf ; %lf ; %lf ; %lf",theta(0), theta(1), theta(2),theta(3));
-            ROS_INFO("RLS  %lf ; %lf ; %lf ; %lf",theta(0), theta(1), theta(2),theta(3) );
+            //ROS_INFO("RLS  %lf ; %lf ; %lf ; %lf",theta(0), theta(1), theta(2),theta(3) );
 
+//----------------------RLC low pass filter--------------------
             double noise = distribution(generator);
             double RC = 1.0/(CUTOFF*2*3.14);
             double dt = 1.0/SAMPLE_RATE;
             double alpha = dt/(RC+dt);
             //double input = torque_ground.y+0.05*noise;
-            //double input = torque_truth(1);
-            double input = forceest1.x[tau_y];
+            double input = drone2_imu.linear_acceleration.y;
+            //double input = forceest1.x[tau_y];
             ooutput = last_output + (alpha*(input - last_output));
             last_output = ooutput;
-            //body_torque.y = last_output;
+
+
+            double input1 = forceest1.x[tau_y];
+            ooutput1 = last_output1 + (alpha*(input1 - last_output1));
+            last_output1 = ooutput1;
+
+            body_torque.x = torque_ground.y;
+            //body_torque.x = drone2_pose.pose.position.x;
+
+
+            body_torque.y = last_output+0.25;
             //body_torque.y = forceest1.x[tau_y];
             //body_torque.y = prev_torque[0];
-            body_torque.y = forceest1.x[p_x];
+            //body_torque.y = forceest1.x[p_x];         
+            //body_torque.y = forceest1.x[tau_y];
+            //body_torque.y = torque_truth(1);
+            body_torque.z = last_output1;
 
             pwm_pub.publish(body_torque);
+            for(int i = 0; i < 10 ; i++){
+                    if(i == 9){
+                        filter_acc_y[i] = last_output;
+                        filter_torque_y[i] = last_output1;
+                    }
+                    else{
+                        filter_acc_y[i] = filter_acc_y[i+1];
+                        filter_torque_y[i] = filter_torque_y[i+1];
+                    }
+            }
+            double max_filter_acc_y = 0 , max_filter_torque_y = 0;
+            for(int i = 2 ; i < 8 ; i++){
+                if( (filter_torque_y[i] > filter_torque_y[i-1]) && (filter_torque_y[i] > filter_torque_y[i-2]) &&(filter_torque_y[i] > filter_torque_y[i+1])&&(filter_torque_y[i] > filter_torque_y[i+2]))
+                        max_filter_torque_y = filter_torque_y[i];
+                if( (filter_acc_y[i] > filter_acc_y[i-1]) && (filter_acc_y[i] > filter_acc_y[i-2]) &&(filter_acc_y[i] > filter_acc_y[i+1])&&(filter_acc_y[i] > filter_acc_y[i+2]))
+                        max_filter_acc_y = filter_acc_y[i];
+
+            }
+
+            end = std::chrono::system_clock::now();
+            std::chrono::duration<double> elapsed_seconds = end - start ;
+            //start = std::chrono::system_clock::now();
+            //std::chrono::duration<double> elapsed_seconds = start;
+            ROS_INFO("RLS  %lf  ;   %lf  ;%lf ",max_filter_torque_y,max_filter_acc_y,elapsed_seconds );
+
+//----------------------least square----------------------------
             //if(torque_ground.y > 0.1){
                 Eigen::VectorXd input_force;
                 input_force.setZero(4,1);
@@ -513,6 +570,6 @@ int main(int argc, char **argv)
         }
         loop_rate.sleep();
         ros::spinOnce();
-
+        //ros::spin();
     }
 }

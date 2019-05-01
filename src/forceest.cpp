@@ -63,23 +63,26 @@ Eigen::MatrixXd forceest::  dynamics(Eigen::MatrixXd sigma_state){
         double omega_value;
         const double m = 1.5;
         Eigen::Vector3d thrust_test;
-        v_k << vx, vy, vz;
+
         thrust_v << 0, 0, thrust;
         gravity << 0, 0, 9.81;
         //F_v << Fx, Fy, Fz;//estimated external force
         J << 0.03, 0, 0,  //0.0625,0.0625,0.12656
              0, 0.05, 0,
              0, 0, 0.1;
+
+        p_v << px, py, pz;
+        v_k << vx, vy, vz;
         omega_v << omegax, omegay, omegaz;
         torque_v << taux, tauy, tauz;
         //beta << betax, betay, betaz;
         //USQUE
         delta_p << ex, ey, ez;
-        p_v << px, py, pz;
+
         a = 3; //1.7
         f = 2*a + 1;
         delta_t = 0.0333333;
-        //delta_t = 0.005;
+        //delta_t = 0.01;
 
         delta_q4 = (-a*(ex*ex+ey*ey+ez*ez) + f*sqrt(f*f + (1 - a*a)*(ex*ex+ey*ey+ez*ez)))/(f*f + ex*ex+ey*ey+ez*ez);
         delta_q3 = (a+delta_q4)*delta_p/f;
@@ -168,8 +171,6 @@ Eigen::MatrixXd forceest::  dynamics(Eigen::MatrixXd sigma_state){
         }
 
 
-
-
         //he propagated sigma points are calculated using
         delta_p_k1 << delta_q_k1(0), delta_q_k1(1), delta_q_k1(2);
         delta_q_4_k1 = delta_q_k1(3);
@@ -177,10 +178,6 @@ Eigen::MatrixXd forceest::  dynamics(Eigen::MatrixXd sigma_state){
         predict_sigma_state(e_x,i) = f*delta_p_k1(0)/(a + delta_q_4_k1);
         predict_sigma_state(e_y,i) = f*delta_p_k1(1)/(a + delta_q_4_k1);
         predict_sigma_state(e_z,i) = f*delta_p_k1(2)/(a + delta_q_4_k1);
-
-
-
-
         if(i == 0){
           predict_sigma_state(e_x,i) = 0;
           predict_sigma_state(e_y,i) = 0;
@@ -195,9 +192,7 @@ Eigen::MatrixXd forceest::  dynamics(Eigen::MatrixXd sigma_state){
 
         //velocity
 
-
-
-        v_k1 = v_k + delta_t * ((R_IB*(thrust_v))/m - gravity );
+        v_k1 = v_k + delta_t * ((R_IB*(thrust_v))/m - gravity );//thrust_v use pwm or force sensor
 
         //rotation
 
@@ -205,18 +200,9 @@ Eigen::MatrixXd forceest::  dynamics(Eigen::MatrixXd sigma_state){
 
         //
 
-
-
-
-
-
         predict_sigma_state(p_x,i) = p_v1(0);
         predict_sigma_state(p_y,i) = p_v1(1);
         predict_sigma_state(p_z,i) = p_v1(2);
-
-        predict_sigma_state(tau_x,i) = taux;
-        predict_sigma_state(tau_y,i) = tauy;
-        predict_sigma_state(tau_z,i) = tauz;
 
         predict_sigma_state(v_x,i) = v_k1(0);
         predict_sigma_state(v_y,i) = v_k1(1);
@@ -225,6 +211,10 @@ Eigen::MatrixXd forceest::  dynamics(Eigen::MatrixXd sigma_state){
         predict_sigma_state(omega_x,i) = omega_v1(0);
         predict_sigma_state(omega_y,i) = omega_v1(1);
         predict_sigma_state(omega_z,i) = omega_v1(2);
+
+        predict_sigma_state(tau_x,i) = taux;
+        predict_sigma_state(tau_y,i) = tauy;
+        predict_sigma_state(tau_z,i) = tauz;
 
         predict_sigma_state(beta_x,i) = betax;//estimate omega bias
         predict_sigma_state(beta_y,i) = betay;
